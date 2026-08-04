@@ -33,6 +33,15 @@ app.get('/produk', (req, res) => {
     })
 })
 
+//---------------- Menampilkan Kategori ----------------->>>>
+app.get('/kategori', (req, res) => {
+    const sql = 'SELECT * FROM kategori'
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ error: err})
+        res.json(results)
+    })
+})
+
 app.listen(PORT, () => {
     console.log(`Server berjalan di http://localhost:${PORT}`)
 })
