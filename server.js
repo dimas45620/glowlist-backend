@@ -1,11 +1,36 @@
 const express = require('express')
 const app = express()
+const mysql = require('mysql2')
 const PORT = 3001
+
+const db = mysql.createConnection({
+    host: 'localhost',
+    user: 'root', 
+    password: '',
+    database: 'db_glowlist'
+})
+
+db.connect(err => {
+    if (err) {
+        console.error('Gagal konek ke database:', err)
+    } else {
+        console.log('Berhasil konek ke database Glowlist')
+    }
+})
 
 app.use(express.json())
 
 app.get('/', (req, res) => {
     res.send('Selamat Datang diGlowlist API 🔥DIMAS')
+})
+
+// ---------- Menampilkan Produk ---------->>>>
+app.get('/produk', (req, res) => {
+    const sql = 'SELECT * FROM produk'
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ error: err})
+        res.json(results)
+    })
 })
 
 app.listen(PORT, () => {
