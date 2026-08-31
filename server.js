@@ -6,6 +6,7 @@ const PORT = 3001
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcrypt')
 const authJWT = require('./middleware')
+
 const saltRounds = 10
 
 app.use(cors());
@@ -42,8 +43,14 @@ app.get('/produk', (req, res) => {
 })
 
 //-----------Post Produk ------------------------
-app.post('/produk', (req, res) => {
-    const { judul, deskripsi, harga, id_kategori } = req.body;
+app.post('/produk', authJWT, (req, res) => {
+    
+    console.log("=== DATA POST PRODUK ===");
+    console.log("BODY:", req.body);
+    console.log("CONTENT TYPE:", req.headers['content-type']);
+    console.log("USER:", req.user);
+
+    const { judul, deskripsi, harga, id_kategori } = req.body || {};
 
     if (!judul || !deskripsi || !harga) {
         return res.status(400).json({
@@ -73,6 +80,8 @@ app.post('/produk', (req, res) => {
         }
     );
 });
+//-----------------------------------
+
 //-------------------------------------------------------------------------
 
 // ---------- Update Produk ----------
@@ -122,7 +131,7 @@ app.get('/produk/:id_produk', (req, res) => {
 });
 //--------------------------------
 // ---------- Hapus Produk ----------
-app.delete('/produk/:id_produk', (req, res) => {
+app.delete('/produk/:id_produk', authJWT, (req, res) => {
     const { id_produk } = req.params;
 
     const sql = 'DELETE FROM produk WHERE id_produk = ?';
@@ -182,6 +191,33 @@ app.post('/pengguna', async (req, res) => {
         res.status(500).json({ error: 'Gagal mengenskripsi password'})
     }
 })
+
+// ---------- Profil Pengguna ----------
+app.get('/pengguna/me', authJWT, (req, res) => {
+    const id_pengguna = req.user.id;
+
+    const sql = `
+        SELECT id_pengguna, nama, email, no_hp
+        FROM pengguna
+        WHERE id_pengguna = ?
+    `;
+
+    db.query(sql, [id_pengguna], (err, results) => {
+        if (err) {
+            return res.status(500).json({
+                error: err.sqlMessage
+            });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({
+                message: 'Pengguna tidak ditemukan'
+            });
+        }
+
+        res.json(results[0]);
+    });
+});
 
 //-------------------LOGIN----------------
 app.post('/login', (req, res) => {
