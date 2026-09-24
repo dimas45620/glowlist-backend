@@ -7,6 +7,21 @@ const jwt = require('jsonwebtoken')
 const bcrypt = require('bcrypt')
 const authJWT = require('./middleware')
 
+const path = require('path')
+const multer = require('multer')
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/')
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9)
+        cb(null, uniqueSuffix + '-' + file.originalname)
+    }
+})
+
+const upload = multer({ storage: storage})
+
 const saltRounds = 10
 
 app.use(cors());
@@ -43,14 +58,15 @@ app.get('/produk', (req, res) => {
 })
 
 //-----------Post Produk ------------------------
-app.post('/produk', authJWT, (req, res) => {
+app.post('/produk', upload.single('file'), authJWT, (req, res) => {
     
-    console.log("=== DATA POST PRODUK ===");
-    console.log("BODY:", req.body);
-    console.log("CONTENT TYPE:", req.headers['content-type']);
-    console.log("USER:", req.user);
+    // console.log("=== DATA POST PRODUK ===");
+    // console.log("BODY:", req.body);
+    // console.log("CONTENT TYPE:", req.headers['content-type']);
+    // console.log("USER:", req.user);
 
     const { judul, deskripsi, harga, id_kategori } = req.body || {};
+    const nama_file = req.file ? req.file.filename : null
 
     if (!judul || !deskripsi || !harga) {
         return res.status(400).json({
@@ -59,13 +75,13 @@ app.post('/produk', authJWT, (req, res) => {
     }
 
     const sql = `
-        INSERT INTO produk (judul, deskripsi, harga, id_kategori, tgl_input)
-        VALUES (?, ?, ?, ?, NOW())
+        INSERT INTO produk (judul, deskripsi, harga, id_kategori, nama_file, tgl_input)
+        VALUES (?, ?, ?, ?, ?, NOW())
     `;
 
     db.query(
         sql,
-        [judul, deskripsi, harga, id_kategori],
+        [judul, deskripsi, harga, id_kategori, nama_file],
         (err, result) => {
             if (err) {
                 return res.status(500).json({
@@ -85,31 +101,66 @@ app.post('/produk', authJWT, (req, res) => {
 //-------------------------------------------------------------------------
 
 // ---------- Update Produk ----------
-app.put('/produk/:id_produk', (req, res) => {
+app.put('/produk/:id_produk', upload.single('file'),authJWT, (req, res) => {
     const { id_produk } = req.params;
     const { judul, deskripsi, harga, id_kategori } = req.body;
 
-    const sql = `
-        UPDATE produk
-        SET judul = ?, deskripsi = ?, harga = ?, id_kategori = ?
+    // Ambil nama file lama dari database
+    const sqlGet = `
+        SELECT nama_file
+        FROM produk
         WHERE id_produk = ?
     `;
 
-    db.query(
-        sql,
-        [judul, deskripsi, harga, id_kategori, id_produk],
-        (err, result) => {
-            if (err) {
-                return res.status(500).json({error: err.sqlMessage});
-            }
-            if (result.affectedRows === 0) {
-                return res.status(404).json({ message: 'Produk tidak ditemukan' });
-            }
-            res.json({
-                message: 'Produk berhasil diupdate!'
+    db.query(sqlGet, [id_produk], (err, results) => {
+        if (err) {
+            return res.status(500).json({
+                error: err.sqlMessage
             });
         }
-    );
+
+        if (results.length === 0) {
+            return res.status(404).json({
+                message: 'Produk tidak ditemukan'
+            });
+        }
+
+        // Jika ada file baru, gunakan nama file baru.
+        // Jika tidak ada file baru, gunakan nama file lama.
+        const nama_file = req.file
+            ? req.file.filename
+            : results[0].nama_file;
+
+        const sqlUpdate = `
+            UPDATE produk
+            SET judul = ?, deskripsi = ?, harga = ?, id_kategori = ?, nama_file = ?
+            WHERE id_produk = ?
+        `;
+
+        db.query(
+            sqlUpdate,
+            [
+                judul,
+                deskripsi,
+                harga,
+                id_kategori,
+                nama_file,
+                id_produk
+            ],
+            (err, result) => {
+                if (err) {
+                    return res.status(500).json({
+                        error: err.sqlMessage
+                    });
+                }
+
+                res.json({
+                    message: 'Produk berhasil diupdate!',
+                    nama_file: nama_file
+                });
+            }
+        );
+    });
 });
 //--------------------------------------------------------------------
 
@@ -218,6 +269,9 @@ app.get('/pengguna/me', authJWT, (req, res) => {
         res.json(results[0]);
     });
 });
+
+//-------------------Uploads-----------------
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 
 //-------------------LOGIN----------------
 app.post('/login', (req, res) => {
